@@ -205,7 +205,7 @@ def main(args):
     
     total_unit_cost_diff = np.array(total_unit_costsB) - np.array(total_unit_costsA)
     # print(find_xy_mean(total_unit_cost_diff))
-    summary.append(create_row('Cost Difference', find_xy_mean(total_unit_cost_diff), [
+    summary.append(create_row('Cost Difference (Option2 - Option1)', find_xy_mean(total_unit_cost_diff), [
                    ''] * years, years))
     write_to_file(summary, years)
     # plot graph
