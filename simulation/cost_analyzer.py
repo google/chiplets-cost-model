@@ -25,9 +25,8 @@ import seaborn as sns
 import time
 import multiprocessing as mp
 
-import argparse
 from reader import readFile
-from preprocessor import simulation, validate
+from preprocessor import simulation, validate, read_params
 from plotter import plot_df, plot_graph, plot_tornado
 from processor import calculate_summary, find_x_mean, find_xy_mean, write_summary
 from copy import deepcopy
@@ -81,7 +80,7 @@ def create_tornado_input(readA, readB, summaryA, summaryB, years, cols, args):
             tornado_input[year].append({'name': f'Option2 {col}', 'high': total_ucd_high[year], 'low': total_ucd_low[year]})
     return tornado_input
 
-def main(args):
+def main():
     print('Starting to read ' + INPUT_FILE_A)
     readA = readFile(INPUT_FILE_A)
     print('Completead reading ' + INPUT_FILE_A)
@@ -92,7 +91,13 @@ def main(args):
     print('Completead reading ' + INPUT_FILE_B)
 
     print('Validating inputs against template...')
-    years = args.years
+    years = read_params(readA, readB, {'name': 'NumOfYears', 'displayName': 'years'})
+
+    print('Total Number of years for forecast: ', years)
+
+    steps = read_params(readA, readB, {'name': 'NumOfSteps', 'displayName': 'steps'})
+    simulations = read_params(readA, readB, {'name': 'NumOfSimulation', 'displayName': 'simulations'})
+    
     template = readFile(TEMPLATE_FILE)
     validate(readA, template, years)
     validate(readB, template, years)
@@ -103,7 +108,8 @@ def main(args):
 
     # plot sensitivity graph if current run requires simulation
     requires_simulation = simulation(readA, years) or simulation(readB, years)
-
+    args = {'years': years, 'steps': steps, 'simulations': simulations}
+ 
     summaryA = calculate_summary(deepcopy(readA), args)
     summaryB = calculate_summary(deepcopy(readB), args)
     write_summary(summaryA, summaryB, years)
@@ -173,8 +179,8 @@ def main(args):
         # evaluate value for low for all years for a variable
         # [[{name: FD, low: 10, high: 40}, {name: Yield, low: 10, high: 40}], [{name: FD, low: 10, high: 40}], [{}]
         # FD as variable
-        args.reps = 1
-        args.simulations = 1
+        args['steps'] = 1
+        args['simulations'] = 1
         tornado_input = create_tornado_input(deepcopy(readA), deepcopy(readB), summaryA, summaryB, years, ['ForecastDemand{year}', 'Asp{year}($)', 'WaferYield{year}', 'WaferPrice{year}($)', 'DefectDensity{year}(Defects/cm^2)'], args)
         plot_tornado(tornado_input)
 
@@ -184,11 +190,5 @@ def main(args):
 
 if __name__ == "__main__":
     print("cpu ", mp.cpu_count())
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--years', type=int, required=True, help='Total number of years of forecast')
-    parser.add_argument('--reps', type=int, default=1, help = 'Number of uniformly distributed values')
-    parser.add_argument('--simulations', type=int, default=1, help = 'Number of simulations to run')
-    args = parser.parse_args()
-    print('Total Number of years for forecast: ', args.years)
-    main(args)
+    main()
     print('Completed the analysis')

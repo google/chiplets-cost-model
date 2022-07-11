@@ -16,14 +16,13 @@
 
 
 # Simulation parameters
-# In case if Monte Carlo analysis is required, then pass params in args 
-# while running scripts as:
-# `python3 cost_analyzer.py --years 5 --reps 10 --simulations 20`
+# In case if Monte Carlo analysis is required, then 
+# specify the values in input data options csv as 'NumOfSteps' and 'NumOfSimulations'
 
 class Params(object):
-    def __init__(self, reps, simulations):
-        self.num_of_reps = reps
+    def __init__(self, steps, simulations):
+        self.num_of_steps = steps
         self.num_of_simulations = simulations
 
     def __str__(self):
-        return f"reps: {self.num_of_reps}, simulations: {self.num_of_simulations}"
+        return f"steps: {self.num_of_steps}, simulations: {self.num_of_simulations}"

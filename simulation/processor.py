@@ -20,7 +20,7 @@ from preprocessor import DEVICE_TYPE_SUBSTRATE, meta_data_row
 from writer import create_row, write_to_file
 
 def calculate_summary(read, args):
-    years = args.years
+    years = args['years']
     input = cleanse(read, args)
 
     operating_cost = calculate_cost(input, 'OpCostYr', years)
@@ -97,7 +97,7 @@ def calculate_assy_scrap(input, years=5):
     assy_scraps = []
 
     for year in range(1, years + 1):
-        #  we create 3D matrix of material cost for each die (i x NUM_OF_REPS x NUM_OF_SIMULATIONS)
+        #  we create 3D matrix of material cost for each die (i x NUM_OF_STEPS x NUM_OF_SIMULATIONS)
         # [[[ 3493250. 4863525. . . to NUM_OF_SIMULATIONS 22089000.], [ 3493250. 4863525. . . to NUM_OF_SIMULATIONS 22089000.]
         #   [ 3493250. 4863525. . . to NUM_OF_SIMULATIONS 22089000.], [ 3493250. 4863525. . . to NUM_OF_SIMULATIONS 22089000.]
         #    ..... to NUM of REPS],
@@ -112,7 +112,7 @@ def calculate_assy_scrap(input, years=5):
         # for each assembly sequence, find sum product and add to find scrap cost for given time t
         for j in range(0, len(assy)):
             assy_j = assy[j]
-                # [ 1. 1 . . . to NUM_OF_REPS 0.], [ 1. 1 . . . to NUM_OF_REPS 0.] ... to i
+                # [ 1. 1 . . . to NUM_OF_STEPS 0.], [ 1. 1 . . . to NUM_OF_STEPS 0.] ... to i
             assy_yield_j = assy_yield[j]
             assy_scrap_j = sum(list(mat_cost[k] * assy_seq for (k, assy_seq) in enumerate(assy_j))) * (1 - assy_yield_j)
             assy_scrap_t.append(assy_scrap_j)
