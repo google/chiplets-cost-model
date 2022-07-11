@@ -332,6 +332,6 @@ def write_summary(summaryA, summaryB, years):
     
     total_unit_cost_diff = np.array(summaryB['total_unit_cost_arr']) - np.array(summaryA['total_unit_cost_arr'])
     # print(find_xy_mean(total_unit_cost_diff))
-    summary.append(create_row('Cost Difference', find_xy_mean(total_unit_cost_diff), [
+    summary.append(create_row('Cost Difference(Option2 - Option1)', find_xy_mean(total_unit_cost_diff), [
                    ''] * years, years))
     write_to_file(summary, years)
