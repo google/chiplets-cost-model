@@ -15,7 +15,55 @@
  """
 
 import numpy as np
+from preprocessor import cleanse
 from preprocessor import DEVICE_TYPE_SUBSTRATE, meta_data_row
+from writer import create_row, write_to_file
+
+def calculate_summary(read, args):
+    years = args.years
+    input = cleanse(read, args)
+
+    operating_cost = calculate_cost(input, 'OpCostYr', years)
+    ip_interface_cost = calculate_cost(input, 'TotalIpInterfaceCostYr', years)
+    misc_cost = calculate_misc_cost(input, years)
+    # print(misc_costA)
+    # [array([[2000000., 2000000., .. to num of simulation.],
+    #     to num of REPS
+    #    [2000000., 2000000., 2000000., 2000000., 2000000.]]), 
+    #  array([[3000000., 3000000., to num of simulation.],
+    #     to num of REPS
+    #   ]), 
+    #  to num of years
+    # ]
+
+    quality_cost = calculate_cost(input, 'QualityCostYr', years)
+    material_cost = calculate_cost(input, 'MatCostYr', years)
+    nre = calculate_nre_cost(input, years)
+    asp = calculate_asp(input, years)
+    mask_cost = calculate_cost(input, 'MaskCost', years)
+    assy_scrap = calculate_assy_scrap(input, years)
+    subs_cost = calculate_substrate_cost(input, years)
+    test_cost = calculate_cost(input, 'TestCost', years)
+    total_cost = calculate_total_cost(input, years, misc_cost, assy_scrap, material_cost,
+                                           quality_cost, operating_cost, ip_interface_cost, 
+                                           mask_cost, nre, subs_cost, test_cost)
+
+    total_unit_cost_arr = calculate_total_unit_cost(input, total_cost, years)
+    # Preparing values for summary output
+    return {
+        'operating_costs': find_xy_mean(operating_cost),
+        'ip_interface_costs': find_xy_mean(ip_interface_cost),
+        'misc_costs': find_xy_mean(misc_cost),
+        'quality_costs': find_xy_mean(quality_cost),
+        'material_costs': find_xy_mean(material_cost),
+        'assy_scraps': find_xy_mean(assy_scrap),
+        'total_costs': find_xy_mean(total_cost),
+        'total_unit_cost_arr': total_unit_cost_arr,
+        'total_unit_costs': find_xy_mean(total_unit_cost_arr), 
+        'mask_costs': mask_cost,
+        'nre': nre,
+        'asp': asp
+    }
 
 
 def filter_metadata_row(input):
@@ -188,3 +236,102 @@ def find_y_mean(lst):
 
 def find_x_mean(lst):
     return list(map(lambda arr: arr.mean(axis = 0), lst))
+
+
+def write_summary(summaryA, summaryB, years):
+
+    material_costsA = summaryA['material_costs']
+    material_costsB = summaryB['material_costs']
+
+    mask_costsA = summaryA['mask_costs']
+    mask_costsB = summaryB['mask_costs']
+
+    nreA = summaryA['nre']
+    nreB = summaryB['nre']
+
+    assy_scrapsA = summaryA['assy_scraps']
+    assy_scrapsB = summaryB['assy_scraps']
+
+    quality_costsA = summaryA['quality_costs']
+    quality_costsB = summaryB['quality_costs']
+
+    operating_costsA = summaryA['operating_costs']
+    operating_costsB = summaryB['operating_costs']
+
+    ip_interface_costsA = summaryA['ip_interface_costs']
+    ip_interface_costsB = summaryB['ip_interface_costs']
+
+    misc_costsA = summaryA['misc_costs']
+    misc_costsB = summaryB['misc_costs']
+
+    total_costsA = summaryA['total_costs']
+    total_costsB = summaryB['total_costs']
+
+    summary = []
+    summary.append(create_row('Material($)', material_costsA, material_costsB, years))
+    summary.append(create_row('Mask Set($)', mask_costsA, mask_costsB, years))
+    summary.append(create_row('NRE($)', nreA, nreB, years))
+    summary.append(create_row('KGD($)', assy_scrapsA, assy_scrapsB, years))
+    summary.append(create_row('Quality($)', quality_costsA, quality_costsB, years))
+    summary.append(create_row('Operating Cost($)',
+                   operating_costsA, operating_costsB, years))
+    summary.append(create_row('IP Interface Cost($)',
+                   ip_interface_costsA, ip_interface_costsB, years))
+    summary.append(create_row('Misc Cost (Assy, Test)($)',
+                   misc_costsA, misc_costsB, years))
+    summary.append(create_row(
+        'Total($)', total_costsA, total_costsB, years))
+
+    # % of Total Cost Contribution
+    summary.append(create_row('Material(%)', cost_contribution(
+        material_costsA, total_costsA), cost_contribution(material_costsB, total_costsB), years))
+    summary.append(create_row('Mask Set(%)', cost_contribution(
+        mask_costsA, total_costsA), cost_contribution(mask_costsB, total_costsB), years))
+    summary.append(create_row('NRE(%)', cost_contribution(
+        nreA, total_costsA), cost_contribution(nreB, total_costsB), years))
+    summary.append(create_row('KGD(%)', cost_contribution(
+        assy_scrapsA, total_costsA), cost_contribution(assy_scrapsB, total_costsB), years))
+    summary.append(create_row('Quality(%)', cost_contribution(
+        quality_costsA, total_costsA), cost_contribution(quality_costsB, total_costsB), years))
+    summary.append(create_row('Operating Cost(%)', cost_contribution(
+        operating_costsA, total_costsA), cost_contribution(operating_costsB, total_costsB), years))
+    summary.append(create_row('IP Interface Cost($)(%)', cost_contribution(
+        ip_interface_costsA, total_costsA), cost_contribution(ip_interface_costsB, total_costsB), years))
+    summary.append(create_row('Misc Cost (Assy, Test)(%)', cost_contribution(
+        misc_costsA, total_costsA), cost_contribution(misc_costsB, total_costsB), years))
+    # print(summary)
+
+    total_unit_costA = summaryA['total_unit_costs']
+    total_unit_costB = summaryB['total_unit_costs']
+
+    summary.append(create_row('Material Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
+        material_costsA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(material_costsB, total_costsB)), years))
+    summary.append(create_row('NRE Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
+        nreA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(nreB, total_costsB)), years))
+    summary.append(create_row('KGD Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
+        assy_scrapsA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(assy_scrapsB, total_costsB)), years))
+    summary.append(create_row('Quality Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
+        quality_costsA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(quality_costsB, total_costsB)), years))
+    summary.append(create_row('Operating Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
+        operating_costsA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(operating_costsB, total_costsB)), years))
+    summary.append(create_row('IP Interface Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
+        ip_interface_costsA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(ip_interface_costsB, total_costsB)), years))
+    summary.append(create_row('Misc Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
+        misc_costsA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(misc_costsB, total_costsB)), years))
+
+    aspA = summaryA['asp']
+    aspB = summaryA['asp']
+    gross_marginsA = calculate_gross_margin(total_unit_costA, aspA)
+    gross_marginsB = calculate_gross_margin(total_unit_costB, aspB)
+    # print(gross_marginsA)
+    # print(gross_marginsB)
+    summary.append(create_row('Gross Margin($)',
+                   gross_marginsA, gross_marginsB, years))
+    summary.append(create_row('Gross Margin(%)', calculate_gross_margin_percent(
+        gross_marginsA, aspA), calculate_gross_margin_percent(gross_marginsB, aspB), years))
+    
+    total_unit_cost_diff = np.array(summaryB['total_unit_cost_arr']) - np.array(summaryA['total_unit_cost_arr'])
+    # print(find_xy_mean(total_unit_cost_diff))
+    summary.append(create_row('Cost Difference(Option2 - Option1)', find_xy_mean(total_unit_cost_diff), [
+                   ''] * years, years))
+    write_to_file(summary, years)

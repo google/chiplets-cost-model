@@ -17,6 +17,7 @@
  """
 
 import locale
+from operator import contains
 from re import S
 import numpy as np
 import pandas as pd
@@ -26,10 +27,10 @@ import multiprocessing as mp
 
 import argparse
 from reader import readFile
-from preprocessor import cleanse, simulation, validate
-from plotter import plot_df, plot_graph
-from processor import calculate_cost, calculate_misc_cost, calculate_assy_scrap, calculate_substrate_cost, calculate_total_cost, calculate_total_unit_cost, cost_contribution, calculate_unit_cost_contribution, calculate_gross_margin, calculate_gross_margin_percent, calculate_asp, find_xy_mean, find_x_mean, calculate_nre_cost
-from writer import create_row, write_to_file
+from preprocessor import simulation, validate
+from plotter import plot_df, plot_graph, plot_tornado
+from processor import calculate_summary, find_x_mean, find_xy_mean, write_summary
+from copy import deepcopy
 
 sns.set_style('whitegrid')
 locale.setlocale(locale.LC_ALL, '')
@@ -38,6 +39,47 @@ INPUT_FILE_A = 'data_option1.csv'
 INPUT_FILE_B = 'data_option2.csv'
 TEMPLATE_FILE = 'input_template.csv'
 
+
+def take_read(read, col, years, type):
+    def map_val(val):
+        if "-" not in val:
+            return val
+        first, second = val.split("-")
+        return first if type == 'High' else second
+
+    def map_row(row):
+        for year in range(1, years + 1):
+            colName = col.replace("{year}", f'Yr{year}')
+            row[colName] = map_val(row[colName])
+        return row
+
+    return list(map(lambda row: map_row(row), read))
+
+
+def create_tornado_input(readA, readB, summaryA, summaryB, years, cols, args):
+    tornado_input = []
+    for i in range(0, years):
+        tornado_input.append([])
+
+    for col in cols:
+        inputA_fd_high = take_read(deepcopy(readA), col, years, 'High')
+        inputA_fd_low = take_read(deepcopy(readA), col, years, 'Low')
+        summaryA_fd_high = calculate_summary(inputA_fd_high, args)
+        summaryA_fd_low = calculate_summary(inputA_fd_low, args)
+        total_ucd_high = find_xy_mean(np.array(summaryA_fd_high['total_unit_cost_arr']) - np.array(summaryB['total_unit_cost_arr']))
+        total_ucd_low = find_xy_mean(np.array(summaryA_fd_low['total_unit_cost_arr']) - np.array(summaryB['total_unit_cost_arr']))
+        for year in range(0, years):
+            tornado_input[year].append({'name': f'Option1 {col}', 'high': total_ucd_high[year], 'low': total_ucd_low[year]})
+        
+        inputB_fd_high = take_read(deepcopy(readB), col, years, 'High')
+        inputB_fd_low = take_read(deepcopy(readB), col, years, 'Low')
+        summaryB_fd_high = calculate_summary(inputB_fd_high, args)
+        summaryB_fd_low = calculate_summary(inputB_fd_low, args)
+        total_ucd_high = find_xy_mean(np.array(summaryA['total_unit_cost_arr']) - np.array(summaryB_fd_high['total_unit_cost_arr']))
+        total_ucd_low = find_xy_mean(np.array(summaryA['total_unit_cost_arr']) - np.array(summaryB_fd_low['total_unit_cost_arr']))
+        for year in range(0, years):
+            tornado_input[year].append({'name': f'Option2 {col}', 'high': total_ucd_high[year], 'low': total_ucd_low[year]})
+    return tornado_input
 
 def main(args):
     print('Starting to read ' + INPUT_FILE_A)
@@ -62,161 +104,18 @@ def main(args):
     # plot sensitivity graph if current run requires simulation
     requires_simulation = simulation(readA, years) or simulation(readB, years)
 
-    inputA = cleanse(readA, args)
-    inputB = cleanse(readB, args)
-    operating_costA = calculate_cost(inputA, 'OpCostYr', years)
-    operating_costB = calculate_cost(inputB, 'OpCostYr', years)
-
-    ip_interface_costA = calculate_cost(
-            inputA, 'TotalIpInterfaceCostYr', years)
-    ip_interface_costB = calculate_cost(
-            inputB, 'TotalIpInterfaceCostYr', years)
-
-    misc_costA = calculate_misc_cost(inputA, years)
-    # print(misc_costA)
-    # [array([[2000000., 2000000., .. to num of simulation.],
-    #     to num of REPS
-    #    [2000000., 2000000., 2000000., 2000000., 2000000.]]), 
-    #  array([[3000000., 3000000., to num of simulation.],
-    #     to num of REPS
-    #   ]), 
-    #  to num of years
-    # ]
-    misc_costB = calculate_misc_cost(inputB, years)
-
-    quality_costA = calculate_cost(inputA, 'QualityCostYr', years)
-    quality_costB = calculate_cost(inputB, 'QualityCostYr', years)
-
-    material_costA = calculate_cost(inputA, 'MatCostYr', years)
-    material_costB = calculate_cost(inputB, 'MatCostYr', years)
-
-    nreA = calculate_nre_cost(inputA, years)
-    nreB = calculate_nre_cost(inputB, years)
-
-    mask_costA = calculate_cost(inputA, 'MaskCost', years)
-    mask_costB = calculate_cost(inputB, 'MaskCost', years)
-
-    assy_scrapA = calculate_assy_scrap(inputA, years)
-    assy_scrapB = calculate_assy_scrap(inputB, years)
-
-    subs_costA = calculate_substrate_cost(inputA, years)
-    subs_costB = calculate_substrate_cost(inputB, years)
-
-    test_costA = calculate_cost(inputA, 'TestCost', years)
-    test_costB = calculate_cost(inputB, 'TestCost', years)
-    total_costA = calculate_total_cost(inputA, years, misc_costA, assy_scrapA, material_costA,
-                                           quality_costA, operating_costA, ip_interface_costA, 
-                                           mask_costA, nreA, subs_costA, test_costA)
-    total_costB = calculate_total_cost(inputB, years, misc_costB, assy_scrapB, material_costB,
-                                           quality_costB, operating_costB, ip_interface_costB, 
-                                           mask_costB, nreB, subs_costB, test_costB)
-    # Preparing values for summary output
-    operating_costsA = find_xy_mean(operating_costA)
-    operating_costsB = find_xy_mean(operating_costB)
-
-    ip_interface_costsA = find_xy_mean(ip_interface_costA)
-    ip_interface_costsB = find_xy_mean(ip_interface_costB)
-
-    misc_costsA = find_xy_mean(misc_costA)
-    misc_costsB = find_xy_mean(misc_costB)
-
-    quality_costsA = find_xy_mean(quality_costA)
-    quality_costsB = find_xy_mean(quality_costB)
-
-    material_costsA = find_xy_mean(material_costA)
-    material_costsB = find_xy_mean(material_costB)
-
-    assy_scrapsA = find_xy_mean(assy_scrapA)
-    assy_scrapsB = find_xy_mean(assy_scrapB)
-
-    total_costsA = find_xy_mean(total_costA)
-    total_costsB = find_xy_mean(total_costB)
-
-    summary = []
-    summary.append(create_row('Material($)', material_costsA,
-                   material_costsB, years))
-    summary.append(create_row(
-        'Mask Set($)', mask_costA, mask_costB, years))
-    summary.append(create_row('NRE($)', nreA, nreB, years))
-    summary.append(create_row(
-        'KGD($)', assy_scrapsA, assy_scrapsB, years))
-    summary.append(create_row('Quality($)', quality_costsA,
-                   quality_costsB, years))
-    summary.append(create_row('Operating Cost($)',
-                   operating_costsA, operating_costsB, years))
-    summary.append(create_row('IP Interface Cost($)',
-                   ip_interface_costsA, ip_interface_costsB, years))
-    summary.append(create_row('Misc Cost (Assy, Test)($)',
-                   misc_costsA, misc_costsB, years))
-    summary.append(create_row(
-        'Total($)', total_costsA, total_costsB, years))
-
-    # % of Total Cost Contribution
-    summary.append(create_row('Material(%)', cost_contribution(
-        material_costsA, total_costsA), cost_contribution(material_costsB, total_costsB), years))
-    summary.append(create_row('Mask Set(%)', cost_contribution(
-        mask_costA, total_costsA), cost_contribution(mask_costB, total_costsB), years))
-    summary.append(create_row('NRE(%)', cost_contribution(
-        nreA, total_costsA), cost_contribution(nreB, total_costsB), years))
-    summary.append(create_row('KGD(%)', cost_contribution(
-        assy_scrapsA, total_costsA), cost_contribution(assy_scrapsB, total_costsB), years))
-    summary.append(create_row('Quality(%)', cost_contribution(
-        quality_costsA, total_costsA), cost_contribution(quality_costsB, total_costsB), years))
-    summary.append(create_row('Operating Cost(%)', cost_contribution(
-        operating_costsA, total_costsA), cost_contribution(operating_costsB, total_costsB), years))
-    summary.append(create_row('IP Interface Cost($)(%)', cost_contribution(
-        ip_interface_costsA, total_costsA), cost_contribution(ip_interface_costsB, total_costsB), years))
-    summary.append(create_row('Misc Cost (Assy, Test)(%)', cost_contribution(
-        misc_costsA, total_costsA), cost_contribution(misc_costsB, total_costsB), years))
-    # print(summary)
-
-    total_unit_costsA = calculate_total_unit_cost(inputA, total_costA, years)
-    total_unit_costsB = calculate_total_unit_cost(inputB, total_costB, years)
-
-    total_unit_costA = find_xy_mean(total_unit_costsA)
-    total_unit_costB = find_xy_mean(total_unit_costsB)
-
-    summary.append(create_row('Material Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
-        material_costsA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(material_costsB, total_costsB)), years))
-    summary.append(create_row('NRE Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
-        nreA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(nreB, total_costsB)), years))
-    summary.append(create_row('KGD Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
-        assy_scrapsA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(assy_scrapsB, total_costsB)), years))
-    summary.append(create_row('Quality Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
-        quality_costsA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(quality_costsB, total_costsB)), years))
-    summary.append(create_row('Operating Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
-        operating_costsA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(operating_costsB, total_costsB)), years))
-    summary.append(create_row('IP Interface Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
-        ip_interface_costsA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(ip_interface_costsB, total_costsB)), years))
-    summary.append(create_row('Misc Total Unit Cost($)', calculate_unit_cost_contribution(total_unit_costA, cost_contribution(
-        misc_costsA, total_costsA)), calculate_unit_cost_contribution(total_unit_costB, cost_contribution(misc_costsB, total_costsB)), years))
-
-    aspA = calculate_asp(inputA, years)
-    aspB = calculate_asp(inputB, years)
-
-    gross_marginsA = calculate_gross_margin(total_unit_costA, aspA)
-    gross_marginsB = calculate_gross_margin(total_unit_costB, aspB)
-    # print(gross_marginsA)
-    # print(gross_marginsB)
-    summary.append(create_row('Gross Margin($)',
-                   gross_marginsA, gross_marginsB, years))
-    summary.append(create_row('Gross Margin(%)', calculate_gross_margin_percent(
-        gross_marginsA, aspA), calculate_gross_margin_percent(gross_marginsB, aspB), years))
-    
-    total_unit_cost_diff = np.array(total_unit_costsB) - np.array(total_unit_costsA)
-    # print(find_xy_mean(total_unit_cost_diff))
-    summary.append(create_row('Cost Difference (Option2 - Option1)', find_xy_mean(total_unit_cost_diff), [
-                   ''] * years, years))
-    write_to_file(summary, years)
+    summaryA = calculate_summary(deepcopy(readA), args)
+    summaryB = calculate_summary(deepcopy(readB), args)
+    write_summary(summaryA, summaryB, years)
     # plot graph
-    plot_graph(years, total_costsA, total_costsB, 'Total Cost')
-    plot_graph(years, total_unit_costA,
-               total_unit_costB, 'Total Unit Cost')
+    plot_graph(years, summaryA['total_costs'], summaryB['total_costs'], 'Total Cost')
+    plot_graph(years, summaryA['total_unit_costs'], summaryB['total_unit_costs'], 'Total Unit Cost')
 
     if requires_simulation:
         cost_diff_cols = []
         for year in range(1, years + 1):
             cost_diff_cols.append(f'CostDiffYr{year}')
+        total_unit_cost_diff = np.array(summaryB['total_unit_cost_arr']) - np.array(summaryA['total_unit_cost_arr'])
         df_data = np.transpose(find_x_mean(total_unit_cost_diff))
         total_unit_cost_diff_df = pd.DataFrame(
             data=df_data, columns=cost_diff_cols)
@@ -269,7 +168,16 @@ def main(args):
         total_unit_cost_diff_df.describe(percentiles=[0.05, 0.5, 0.95]).round(2).to_csv("outputs/stochastic_analysis.csv")
         # print(total_unit_cost_diff_df.describe(percentiles=[0.05, 0.5, 0.95]).round(2))
         plot_df(total_unit_cost_diff_df)
-    
+
+        # plot tornado chart
+        # evaluate value for low for all years for a variable
+        # [[{name: FD, low: 10, high: 40}, {name: Yield, low: 10, high: 40}], [{name: FD, low: 10, high: 40}], [{}]
+        # FD as variable
+        args.reps = 1
+        args.simulations = 1
+        tornado_input = create_tornado_input(deepcopy(readA), deepcopy(readB), summaryA, summaryB, years, ['ForecastDemand{year}', 'Asp{year}($)', 'WaferYield{year}', 'WaferPrice{year}($)', 'DefectDensity{year}(Defects/cm^2)'], args)
+        plot_tornado(tornado_input)
+
     print()
     print(f'Time taken: {(time.time() - start)}sec')
 
