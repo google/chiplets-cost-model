@@ -68,13 +68,22 @@ def validate_col(columns, column):
         raise Exception(f"Following columns are missing, please use the template file inside input folder: {column}")
 
 
+def read_params(readA, readB, col):
+    valA = int(readA[0][col['name']])
+    valB = int(readB[0][col['name']])
+    if valA != valB:
+        raise Exception(f"Number of {col['displayName']} should be same for both input! Option1 has {valA} and Option2 has {valB}")
+
+    return valA
+
+
 def cleanse(reads, args):
     input = []
     # Update the params values
-    params.num_of_reps = args.reps
-    params.num_of_simulations = args.simulations
+    params.num_of_steps = args['steps']
+    params.num_of_simulations = args['simulations']
 
-    years = args.years
+    years = args['years']
     for row in reads:
         # Calculations not required for metadata row
         if meta_data_row(row):
@@ -328,10 +337,10 @@ def get_normal_distribution(range_val):
     low, high = float(first), float(second)
     avg = (low + high) / 2
     sd = avg / 10
-    return np.random.normal(avg, sd, size = (params.num_of_reps, params.num_of_simulations))
+    return np.random.normal(avg, sd, size = (params.num_of_steps, params.num_of_simulations))
 
 def get_transformed_matrix(val):
-    return np.array([[val] * params.num_of_simulations] * params.num_of_reps)
+    return np.array([[val] * params.num_of_simulations] * params.num_of_steps)
 
 def simulation(input, years):
     for row in input:
