@@ -50,6 +50,23 @@ def plot_df(df, suffix=''):
     plt.savefig(f'outputs/cost_diff_summary.png')
     plt.clf()
 
+"""
+The input param `values` should in format:
+[
+    [
+        {
+            'name': 'variable name1',
+            'high': high_val1,
+            'low': low_val1
+        },
+        {
+            'name': 'variable name2',
+            'high': high_val2,
+            'low': low_val2
+        }
+    ]
+]
+"""
 def plot_tornado(values):
     def cost_diff(val):
         return abs(val['high'] - val['low'])

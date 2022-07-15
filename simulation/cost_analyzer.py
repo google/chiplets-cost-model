@@ -26,7 +26,7 @@ import time
 import multiprocessing as mp
 
 from reader import readFile
-from preprocessor import simulation, validate, read_params
+from preprocessor import simulation, validate
 from plotter import plot_df, plot_graph, plot_tornado
 from processor import calculate_summary, find_x_mean, find_xy_mean, write_summary
 from copy import deepcopy
@@ -37,6 +37,7 @@ locale.setlocale(locale.LC_ALL, '')
 INPUT_FILE_A = 'data_option1.csv'
 INPUT_FILE_B = 'data_option2.csv'
 TEMPLATE_FILE = 'input_template.csv'
+PARAMS_INPUT_FILE = "params.csv"
 
 
 def take_read(read, col, years, type):
@@ -91,13 +92,11 @@ def main():
     print('Completead reading ' + INPUT_FILE_B)
 
     print('Validating inputs against template...')
-    years = read_params(readA, readB, {'name': 'NumOfYears', 'displayName': 'years'})
+    params = readFile(PARAMS_INPUT_FILE)
+    years = int(params[0]['NumOfYears'])
 
     print('Total Number of years for forecast: ', years)
 
-    steps = read_params(readA, readB, {'name': 'NumOfSteps', 'displayName': 'steps'})
-    simulations = read_params(readA, readB, {'name': 'NumOfSimulation', 'displayName': 'simulations'})
-    
     template = readFile(TEMPLATE_FILE)
     validate(readA, template, years)
     validate(readB, template, years)
@@ -108,7 +107,7 @@ def main():
 
     # plot sensitivity graph if current run requires simulation
     requires_simulation = simulation(readA, years) or simulation(readB, years)
-    args = {'years': years, 'steps': steps, 'simulations': simulations}
+    args = {'years': years, 'steps': int(params[0]['NumOfSteps']), 'simulations': int(params[0]['NumOfSimulation'])}
  
     summaryA = calculate_summary(deepcopy(readA), args)
     summaryB = calculate_summary(deepcopy(readB), args)
