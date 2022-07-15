@@ -68,15 +68,6 @@ def validate_col(columns, column):
         raise Exception(f"Following columns are missing, please use the template file inside input folder: {column}")
 
 
-def read_params(readA, readB, col):
-    valA = int(readA[0][col['name']])
-    valB = int(readB[0][col['name']])
-    if valA != valB:
-        raise Exception(f"Number of {col['displayName']} should be same for both input! Option1 has {valA} and Option2 has {valB}")
-
-    return valA
-
-
 def cleanse(reads, args):
     input = []
     # Update the params values
