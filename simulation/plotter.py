@@ -41,12 +41,18 @@ def plot_df(df, suffix=''):
     for col in df.columns:
         file_name = f'{col}_{suffix}.png' if suffix else f'{col}.png'
         plt.figure()
+        plt.ylabel('Frequency')
+        plt.xlabel('Unit Cost Diff (Option2 - Option1)')
         plt.hist(df[col], bins=25, histtype='stepfilled')
         plt.savefig(f'outputs/{file_name}')
         plt.clf()
 
+    # plot cost diff for all years in a single diagram
     col = len(df.columns)
-    df.hist(bins=25, figsize=(5, col * 5), layout=(col, 1))
+    axarr = df.hist(bins=25, figsize=(5, col * 5), layout=(col, 1))
+    for ax in axarr.flatten():
+        ax.set_ylabel('Frequency')
+        ax.set_xlabel('Unit Cost Diff (Option2 - Option1)')
     plt.savefig(f'outputs/cost_diff_summary.png')
     plt.clf()
 

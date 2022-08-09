@@ -7,7 +7,7 @@
 pip3 install -r requirements.txt
 ```
 ### Running baseline analysis
-1. Provide input files in `inputs` directory. Use `input_template.csv` to create the input files. The name should be `data_option1.csv` and `data_option2.csv`
+1. Provide input files in `inputs` directory. `input_template.csv` can be used to create the input files, but `input_template.csv` shouldn't be updated directly - VERY IMPORTANT!! The input file name should be `data_option1.csv` and `data_option2.csv`
 2. Run `python3 cost_analyzer.py`
 
 For example to run simulation for 5 years, specify the values in input `params.csv` file:
@@ -21,7 +21,7 @@ NumOfYears,NumOfSteps,NumOfSimulation
 
 
 ### Running Monte Carlo analysis
-1. Provide input files in `inputs` directory. Use `input_template.csv` to create the input files. The name should be `data_option1.csv` and `data_option2.csv`
+1. Provide input files in `inputs` directory. `input_template.csv` can be used to create the input files, but `input_template.csv` shouldn't be updated directly - VERY IMPORTANT!! The input file name should be `data_option1.csv` and `data_option2.csv`
 2. Run `python3 cost_analyzer.py`
 
 For example to run simulation for 5 years, 50 values randomly normally distributed for the range and 8000 simulations, specify the values in `params.csv` input file:
